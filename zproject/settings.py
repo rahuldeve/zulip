@@ -81,6 +81,10 @@ TUTORIAL_ENABLED = True
 # Import local_settings after determining the deployment/machine type
 if PRODUCTION:
     from .local_settings import *
+    # Configuration for django-sendfile
+    SENDFILE_BACKEND = 'sendfile.backends.nginx'
+    SENDFILE_ROOT = os.path.join(LOCAL_UPLOADS_DIR, 'files')
+    SENDFILE_URL = '/user_uploads_internal'
 else:
     from .dev_settings import *
 

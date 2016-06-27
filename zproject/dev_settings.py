@@ -21,4 +21,5 @@ EXTRA_INSTALLED_APPS = ["zilencer", "analytics"]
 # Disable Camo in development
 CAMO_URI = ''
 OPEN_REALM_CREATION = True
+SENDFILE_BACKEND = 'sendfile.backends.development'
 
