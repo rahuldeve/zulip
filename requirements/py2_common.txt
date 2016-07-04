@@ -10,3 +10,6 @@ python-ldap==2.4.19
 
 # Needed for Twitter card integration
 python-twitter==1.1
+
+# Needed for serving files
+django-sendfile==0.3.10
