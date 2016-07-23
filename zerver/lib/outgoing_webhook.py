@@ -12,6 +12,8 @@ from zerver.models import get_outgoing_webhook_bot_profile, Realm
 from zerver.lib.actions import internal_send_message
 from zerver.lib.queue import queue_json_publish
 
+from straight.plugin import load
+
 class OutgoingWebhookBotInterface(object):
     email = None # type: text_type
     full_name = None # type: text_type
@@ -116,7 +118,7 @@ class BotMessageActions():
             queue_json_publish("outhook_worker", event, lambda x: None)
 
 def load_available_bots():
-    # type: () -> Dict[text_type, type]
+    # type: () -> Dict[text_type, Any]
     modules = load("zerver.outgoing_webhooks")
     class_members = [inspect.getmembers(module, inspect.isclass) for module in modules] # type: List[List[Tuple[str, Any]]]
     if len(class_members) > 0:
