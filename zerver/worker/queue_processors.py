@@ -23,6 +23,8 @@ from confirmation.models import Confirmation
 from zerver.lib.db import reset_queries
 from django.core.mail import EmailMessage
 from zerver.lib.redis_utils import get_redis_client
+from zerver.lib.outgoing_webhook import get_outgoing_webhook_bot_handler
+from zerver.models import get_realm
 
 import os
 import sys
@@ -33,6 +35,7 @@ import time
 import datetime
 import logging
 import simplejson
+import requests
 from six.moves import cStringIO as StringIO
 
 class WorkerDeclarationException(Exception):
@@ -341,6 +344,24 @@ class MirrorWorker(QueueProcessingWorker):
     def consume(self, event):
         mirror_email(email.message_from_string(event["message"]),
                      rcpt_to=event["rcpt_to"], pre_checked=True)
+
+@assign_queue('outhook_worker')
+class OutgoingWebhookWorker(QueueProcessingWorker):
+
+    def consume(self, event):
+        bot_email = event['bot_email']
+        command = event['command']
+        trigger_message = event['message']
+        realm = get_realm(trigger_message["sender_domain"])
+
+        bot_handler = get_outgoing_webhook_bot_handler(bot_email, realm)
+        processed_command = bot_handler.process_command(command)
+        if processed_command is not None:
+            bot_action, response_message = bot_handler.do_rest_call(**processed_command)
+            bot_action(event, response_message)
+        else:
+            bot_action, message = bot_handler.handle_invalid_command(command, processed_command['trigger_cache'])
+            bot_action(event, message)
 
 @assign_queue('test')
 class TestWorker(QueueProcessingWorker):

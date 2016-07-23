@@ -715,7 +715,7 @@ def do_send_messages(messages):
                              "command": command,
                              "retry": 0,
                              "message": message['message'].to_dict(apply_markdown=False)}
-            queue_json_publish("test", trigger_event, lambda x: None)
+            queue_json_publish("outhook_worker", trigger_event, lambda x: None)
 
         event = dict(
             type         = 'message',
