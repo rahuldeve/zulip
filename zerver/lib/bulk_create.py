@@ -3,9 +3,11 @@ from typing import Any, Iterable, Mapping, Optional, Set, Tuple
 from six import text_type
 
 from zerver.lib.initial_password import initial_password
-from zerver.models import Realm, Stream, UserProfile, Huddle, \
+from zerver.models import Realm, Stream, UserProfile, Huddle, OutgoingWebhookBot, \
     Subscription, Recipient, Client, get_huddle_hash, resolve_email_to_domain
 from zerver.lib.create_user import create_user_profile
+
+from django.db import transaction
 
 def bulk_create_realms(realm_list):
     # type: (Iterable[text_type]) -> None
@@ -61,6 +63,67 @@ def bulk_create_users(realms, users_raw, bot_type=None):
 
     subscriptions_to_create = [] # type: List[Subscription]
     for (email, full_name, short_name, active) in users:
+        subscriptions_to_create.append(
+            Subscription(user_profile_id=profiles_by_email[email].id,
+                         recipient=recipients_by_email[email]))
+    Subscription.objects.bulk_create(subscriptions_to_create)
+
+def bulk_create_outgoing_webhook_bots(realms, users_raw):
+    # type: (Mapping[text_type, Realm], Set[Tuple[text_type, text_type, text_type, text_type, bool]]) -> None
+    bot_type = UserProfile.OUTGOING_WEBHOOK_BOT
+
+    users = [] # type: List[Tuple[text_type, text_type, text_type, text_type, bool]]
+    existing_users = set(u.email for u in UserProfile.objects.all()) # type: Set[text_type]
+    for (email, full_name, short_name, post_url, active) in users_raw:
+        if email in existing_users:
+            continue
+        users.append((email, full_name, short_name, post_url, active))
+        existing_users.add(email)
+    users = sorted(users)
+
+    # Now create user_profiles
+    profiles_to_create = [] # type: List[OutgoingWebhookBot]
+    for (email, full_name, short_name, post_url, active) in users:
+        domain = resolve_email_to_domain(email)
+        user_profile = create_user_profile(realms[domain], email,
+                                      initial_password(email), active, bot_type,
+                                      full_name, short_name, None, False)
+
+        bot_profile = OutgoingWebhookBot.objects.create(
+            email = user_profile.email, is_staff = user_profile.is_staff,
+            is_active = user_profile.is_active, full_name = full_name,
+            short_name = short_name, last_login = user_profile.last_login,
+            date_joined = user_profile.date_joined, realm = user_profile.realm,
+            pointer=-1, is_bot=bool(bot_type), bot_type=bot_type,
+            is_mirror_dummy=user_profile.is_mirror_dummy,
+            enable_stream_desktop_notifications=user_profile.enable_stream_desktop_notifications,
+            onboarding_steps=user_profile.onboarding_steps,
+            post_url=post_url
+        )
+        profiles_to_create.append(bot_profile)
+
+    with transaction.atomic():
+        for profile in profiles_to_create:
+            profile.save()
+
+    profiles_by_email = {} # type: Dict[text_type, UserProfile]
+    profiles_by_id = {} # type: Dict[int, UserProfile]
+    for profile in UserProfile.objects.select_related().all():
+        profiles_by_email[profile.email] = profile
+        profiles_by_id[profile.id] = profile
+
+    recipients_to_create = [] # type: List[Recipient]
+    for (email, full_name, short_name, post_url, active) in users:
+        recipients_to_create.append(Recipient(type_id=profiles_by_email[email].id,
+                                              type=Recipient.PERSONAL))
+    Recipient.objects.bulk_create(recipients_to_create)
+
+    recipients_by_email = {} # type: Dict[text_type, Recipient]
+    for recipient in Recipient.objects.filter(type=Recipient.PERSONAL):
+        recipients_by_email[profiles_by_id[recipient.type_id].email] = recipient
+
+    subscriptions_to_create = [] # type: List[Subscription]
+    for (email, full_name, short_name, post_url, active) in users:
         subscriptions_to_create.append(
             Subscription(user_profile_id=profiles_by_email[email].id,
                          recipient=recipients_by_email[email]))

@@ -18,7 +18,7 @@ from django.db.models import Count
 from django.conf import settings
 from zerver.lib.bulk_create import bulk_create_realms, \
     bulk_create_streams, bulk_create_users, bulk_create_huddles, \
-    bulk_create_clients
+    bulk_create_clients, bulk_create_outgoing_webhook_bots
 from zerver.lib.timestamp import timestamp_to_datetime
 from zerver.models import MAX_MESSAGE_LENGTH
 from zerver.models import DefaultStream, get_stream, get_realm
@@ -43,6 +43,14 @@ def create_users(realms, name_list, bot_type=None):
         short_name = email_to_username(email)
         user_set.add((email, full_name, short_name, True))
     bulk_create_users(realms, user_set, bot_type)
+
+def create_outgoing_webhook_bots(realms, name_list):
+    # type: (Mapping[text_type, Realm], Iterable[Tuple[text_type, text_type, text_type]]) -> None
+    user_set = set() # type: Set[Tuple[text_type, text_type, text_type, text_type, bool]]
+    for full_name, email, post_url in name_list:
+        short_name = email_to_username(email)
+        user_set.add((email, full_name, short_name, post_url, True))
+    bulk_create_outgoing_webhook_bots(realms, user_set)
 
 def create_streams(realms, realm, stream_list):
     # type: (Mapping[text_type, Realm], Realm, Iterable[text_type]) -> None
@@ -218,6 +226,11 @@ class Command(BaseCommand):
                 ("Zulip Webhook Bot", "webhook-bot@zulip.com"),
             ]
             create_users(realms, zulip_webhook_bots, bot_type=UserProfile.INCOMING_WEBHOOK_BOT)
+
+            zulip_outhook_bots = [
+                ("IsItUpBot", "isitup-bot@zulip.com", "https://isitup.org/")
+            ]
+            create_outgoing_webhook_bots(realms, zulip_outhook_bots)
 
             if not options["test_suite"]:
                 # Initialize the email gateway bot as an API Super User
