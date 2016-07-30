@@ -84,6 +84,10 @@ postmonkey==1.0b0
 # Needed to access our database
 psycopg2==2.6
 
+# Python wrapper around OpenSSL
+# Needed by ndg-httpsclient
+pyOpenSSL==16.0.0
+
 pyasn1==0.1.7
 pyasn1-modules==0.0.5
 pycrypto==2.6.1
